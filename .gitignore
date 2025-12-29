@@ -7,3 +7,5 @@ HermaeusMora/.env
 __pycache__/
 .env
 *.pyc
+/HermaeusMora/seekers/web_pages/downloads
+/HermaeusMora/seekers/web_pages/markdowns
