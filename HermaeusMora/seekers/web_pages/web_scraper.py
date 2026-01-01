@@ -2,6 +2,7 @@ import os
 import requests
 
 from pathlib import Path
+from dotenv import load_dotenv
 
 from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
@@ -13,6 +14,15 @@ from utility_scripts.system_logging import setup_logger
 # configure logging
 logger = setup_logger(__name__)
 
+# Load Env
+load_dotenv()
+
+HEADERS = {
+    "User-Agent": os.getenv("USER_AGENT"),
+    "Accept": "text/html",
+    "Accept-Language": "en-US,en;q=0.5"
+}
+
 
 def fetch_html(url: str):
     """Fetches HTML from a URL and saves it to a local .html file.
@@ -23,7 +33,7 @@ def fetch_html(url: str):
     """
     logger.info(f"Fetching {url}")
 
-    response = requests.get(url)
+    response = requests.get(url, headers=HEADERS)
 
     status_code = f"{url} || Responded with: {response.status_code}"
     if response.status_code != 200:
@@ -57,7 +67,7 @@ def convert_html(path_to_html):
         return -1
 
     converter = DocumentConverter()
-    doc = converter.convert(html_file).document
+    doc = converter.convert(path_to_html).document
 
     markdown_dir = Path("markdowns").resolve()
     markdown_dir.mkdir(exist_ok=True)
@@ -75,7 +85,13 @@ def convert_html(path_to_html):
 
 
 def chunk_document(path_to_doc):
-    logger.info(f"Chunking > {Path(path_to_doc).name}")
+    """Chunks document into relevant parts
+     Returns:
+        file_name, chunks, tokenizer used, chunker used
+    """
+
+    file_name = Path(path_to_doc).stem
+    logger.info(f"Chunking > {file_name}")
 
     if not os.path.exists(path_to_doc):
         logger.error(f"{path_to_doc} Does not exist")
@@ -83,7 +99,7 @@ def chunk_document(path_to_doc):
 
     # Converting document
     converter = DocumentConverter()
-    doc = converter.convert(html_file).document
+    doc = converter.convert(path_to_doc).document
 
     # Initialize tokenizer
     EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
@@ -100,7 +116,7 @@ def chunk_document(path_to_doc):
     chunks = list(chunk_iter)
 
     logger.info(f"Finished Chunking")
-    return chunks, tokenizer, chunker
+    return file_name, chunks, tokenizer, chunker
 
 
 def analyze_chunks(chunks, tokenizer):
@@ -134,20 +150,20 @@ def analyze_chunks(chunks, tokenizer):
         logger.info(f"  {start}-{end} tokens: {count} chunks")
 
 
-def save_chunks(chunks, chunker):
+def save_chunks(file_name, chunks, chunker):
     """Save chunks to file with separators, preserving context and headings."""
 
     chunk_dir = Path("chunks").resolve()
     chunk_dir.mkdir(exist_ok=True)
 
-    output_path = chunk_dir / f"chunks.txt"
+    output_path = chunk_dir / f"{file_name}__chunks.txt"
 
     with open(output_path, 'w', encoding='utf-8') as f:
         for i, chunk in enumerate(chunks):
             f.write(f"{'='*60}\n")
             f.write(f"CHUNK {i}\n")
             f.write(f"{'='*60}\n")
-            print(chunk)
+            # print(chunk)
             # Use contextualize to preserve headings and metadata
             contextualized_text = chunker.contextualize(chunk=chunk)
             f.write(contextualized_text)
@@ -161,13 +177,13 @@ if __name__ == "__main__":
     markdown_file = convert_html(html_file)
 
     try:
-        chunks, tokenizer, chunker = chunk_document(markdown_file)
+        file_name, chunks, tokenizer, chunker = chunk_document(markdown_file)
 
         # Analyze chunks
         # analyze_chunks(chunks, tokenizer)
 
         # Save chunks
-        save_chunks(chunks, chunker)
+        save_chunks(file_name, chunks, chunker)
 
     except Exception as e:
         print(f"\n✗ Error: {e}")

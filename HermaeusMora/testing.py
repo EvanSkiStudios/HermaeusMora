@@ -1,4 +1,4 @@
-from Hermaeus.HermaMora import HermaeusMora
+from hermaeus.HermaMora import HermaeusMora
 
 HermaeusMora = HermaeusMora()
 HermaeusMora.create()
