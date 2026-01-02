@@ -9,7 +9,7 @@ from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
 
-from apocrypha.EpistolaryAcumen import EpistolaryAcumen
+from apocrypha.EpistolaryAcumen import RetainKnowledge
 from utility_scripts.functions import url_to_filename
 from utility_scripts.system_logging import setup_logger
 
@@ -193,7 +193,7 @@ if __name__ == "__main__":
 
         # Save chunks
         json_chunks = save_chunks(file_name, chunks, chunker)
-        EpistolaryAcumen(json_chunks)
+        RetainKnowledge(json_chunks)
 
     except Exception as e:
         print(f"\n✗ Error: {e}")
