@@ -1,11 +1,12 @@
 import os
-import faiss
-import numpy as np
-import hashlib
 import json
+import hashlib
+from pathlib import Path
+
+import numpy as np
+import faiss
 import ollama
 
-from pathlib import Path
 from utility_scripts.system_logging import setup_logger
 
 
@@ -14,12 +15,18 @@ logger = setup_logger(__name__)
 
 
 # PATHS
-base_dir = Path.cwd()
+base_dir = Path(__file__).resolve().parent / "database"
+base_dir.mkdir(exist_ok=True)
 faiss_path = base_dir / "faiss.bin"
 embeddings_path = base_dir / "embeddings.npy"
 metadata_path = base_dir / "metadata.json"
 
+EMBEDDING_MODEL = "embeddinggemma"
 
+
+# -------------------
+# Metadata functions
+# -------------------
 def json_builder(faiss_index: int, chunk_index: int, content: str) -> dict:
     """
     Build a metadata entry for a chunk.
@@ -69,19 +76,28 @@ def load_metadata():
         with open(metadata_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, list):
+                logger.info("Loading Metadata")
                 return data
+    logger.info("No Previous Metadata Found")
     return []
 
 
+# -------------------
+# Chunk loader
+# -------------------
 def chunk_loader(chunk_path):
     """
     Load chunk JSON file and return list of chunks.
     """
+    logger.info("Gathering Chunks")
     with chunk_path.open("r", encoding="utf-8") as f:
         json_chunks = json.load(f)
     return json_chunks
 
 
+# -------------------
+# Embeddings
+# -------------------
 def embed_chunk(chunk_content):
     """
     Generate a single embedding for a chunk and reshape for FAISS.
@@ -98,30 +114,14 @@ def embed_chunk(chunk_content):
     return embedding_vectors, dim
 
 
-def faiss_index_chunk(vectors, dim):
-    """
-    Create a FAISS index from a single chunk embedding.
-    Returns the FAISS IndexFlatL2 object.
-    """
-    index = faiss.IndexFlatL2(dim)
-    # noinspection PyArgumentList
-    index.add(vectors)
-    return index
-
-
-def faiss_write(index):
-    """
-    Write a FAISS index to disk.
-    """
-    faiss.write_index(index, faiss_path)
-
-
 def load_embeddings():
     """
     Load existing embeddings cache or return empty array.
     """
     if os.path.exists(embeddings_path):
+        logger.info("Embeddings Found")
         return np.load(embeddings_path)
+    logger.info("No Embeddings Found, Creating New")
     return np.empty((0, 0), dtype="float32")
 
 
@@ -130,3 +130,30 @@ def save_embeddings(all_embeddings):
     Save the embeddings cache to .npy.
     """
     np.save(embeddings_path, all_embeddings)
+
+
+# -------------------
+# FAISS incremental functions
+# -------------------
+def load_or_create_faiss_index(dim: int):
+    if os.path.exists(faiss_path):
+        index = faiss.read_index(str(faiss_path))
+        if index.d != dim:
+            raise ValueError(f"FAISS dimension mismatch: expected {dim}, got {index.d}")
+        return index
+    else:
+        # Create empty FAISS index
+        index = faiss.IndexFlatL2(dim)
+        return index
+
+
+def append_to_faiss(index, vectors):
+    """
+    Add new vectors to an existing FAISS index.
+    """
+    index.add(vectors)
+
+
+def save_faiss(index):
+    faiss.write_index(index, str(faiss_path))
+
