@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -8,6 +9,7 @@ from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
 
+from apocrypha.EpistolaryAcumen import EpistolaryAcumen
 from utility_scripts.functions import url_to_filename
 from utility_scripts.system_logging import setup_logger
 
@@ -151,25 +153,32 @@ def analyze_chunks(chunks, tokenizer):
 
 
 def save_chunks(file_name, chunks, chunker):
-    """Save chunks to file with separators, preserving context and headings."""
+    """Save chunks to json, preserving context and headings."""
 
     chunk_dir = Path("chunks").resolve()
     chunk_dir.mkdir(exist_ok=True)
 
-    output_path = chunk_dir / f"{file_name}__chunks.txt"
+    output_path = chunk_dir / f"{file_name}__chunks.json"
 
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with output_path.open("w", encoding="utf-8") as f:
+        f.write("[\n")  # start JSON array
         for i, chunk in enumerate(chunks):
-            f.write(f"{'='*60}\n")
-            f.write(f"CHUNK {i}\n")
-            f.write(f"{'='*60}\n")
-            # print(chunk)
-            # Use contextualize to preserve headings and metadata
             contextualized_text = chunker.contextualize(chunk=chunk)
-            f.write(contextualized_text)
-            f.write("\n\n")
+
+            chunk_data = {
+                "chunk_id": i,
+                "content": contextualized_text
+            }
+
+            json.dump(chunk_data, f, ensure_ascii=False, indent=4)
+            if i < len(chunks) - 1:
+                f.write(",\n")  # comma between items
+            else:
+                f.write("\n")  # last item
+        f.write("]")  # end JSON array
 
     logger.info(f"✓ Chunks saved to: {output_path}")
+    return output_path
 
 
 if __name__ == "__main__":
@@ -183,7 +192,8 @@ if __name__ == "__main__":
         # analyze_chunks(chunks, tokenizer)
 
         # Save chunks
-        save_chunks(file_name, chunks, chunker)
+        json_chunks = save_chunks(file_name, chunks, chunker)
+        EpistolaryAcumen(json_chunks)
 
     except Exception as e:
         print(f"\n✗ Error: {e}")
