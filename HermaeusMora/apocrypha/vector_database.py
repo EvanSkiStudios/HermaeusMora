@@ -9,6 +9,9 @@ import ollama
 
 from utility_scripts.system_logging import setup_logger
 
+# ToDo
+# Check if info is already in the data base, to avoid duplicates
+
 
 # configure logging
 logger = setup_logger(__name__)

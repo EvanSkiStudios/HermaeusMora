@@ -182,7 +182,7 @@ def save_chunks(file_name, chunks, chunker):
 
 
 if __name__ == "__main__":
-    html_file = fetch_html("https://en.uesp.net/wiki/Skyrim:Skyrim")
+    html_file = fetch_html("https://en.uesp.net/wiki/Lore:Hermaeus_Mora")
     markdown_file = convert_html(html_file)
 
     try:
