@@ -6,7 +6,7 @@ import ollama
 from ollama import Client, chat
 from dotenv import load_dotenv
 
-from HermaMora_Config import HermaeusMora_System_Prompt
+from hermaeus.HermaMora_Config import HermaeusMora_System_Prompt
 from utility_scripts.system_logging import setup_logger
 
 # configure logging
@@ -63,15 +63,21 @@ class HermaeusMora:
         )
         return response["response"]
 
-    def chat(self, prompt: str) -> str:
+    def chat(self, prompt: str, context: str) -> str:
         options = self.options | {'think': True}
 
         response = chat(
             model=self.model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": f"Use this context to respond to the user:\n{context}"},
+                {"role": "user", "content": prompt}
+            ],
             options=options,
             stream=False
         )
+        print("CONTEXT:")
+        print(context)
+        print("=" * 60)
         print(response.message.thinking)
-        print("\n\n")
+        print("=" * 60)
         return response.message.content
