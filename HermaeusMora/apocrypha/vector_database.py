@@ -25,6 +25,25 @@ EMBEDDING_MODEL = "embeddinggemma"
 
 
 # -------------------
+# Getter functions
+# -------------------
+def get_faiss():
+    """ :return: faiss index or None"""
+    if os.path.exists(faiss_path):
+        index = faiss.read_index(str(faiss_path))
+        return index
+    return None
+
+
+def get_embeddings_path():
+    return embeddings_path
+
+
+def get_metadata_path():
+    return metadata_path
+
+
+# -------------------
 # Metadata functions
 # -------------------
 def json_builder(faiss_index: int, chunk_index: int, content: str) -> dict:
@@ -98,13 +117,13 @@ def chunk_loader(chunk_path):
 # -------------------
 # Embeddings
 # -------------------
-def embed_chunk(chunk_content):
+def embed_content(content):
     """
     Generate a single embedding for a chunk and reshape for FAISS.
-    Returns (1, dim) array and dim.
+    :return: (1, dim) array and dim.
     """
     embedding_model = "embeddinggemma"
-    resp = ollama.embed(model=embedding_model, input=chunk_content)
+    resp = ollama.embed(model=embedding_model, input=content)
     embedding = resp["embeddings"][0]
 
     # reshape to 2D for FAISS

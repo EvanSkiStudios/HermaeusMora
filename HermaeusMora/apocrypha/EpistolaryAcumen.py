@@ -2,8 +2,8 @@ import logging
 import numpy as np
 
 from utility_scripts.system_logging import setup_logger
-from apocrypha.vector_database import chunk_loader, load_embeddings, load_metadata, embed_chunk, \
-    load_or_create_faiss_index, append_to_faiss, json_builder, save_metadata, save_embeddings, save_faiss
+from apocrypha.vector_database import chunk_loader, load_embeddings, load_metadata, embed_content, \
+    load_or_create_faiss_index, append_to_faiss, json_builder, save_metadata, save_embeddings, save_faiss, get_faiss
 
 # configure logging
 logger = setup_logger(__name__)
@@ -38,7 +38,7 @@ def RetainKnowledge(path):
         content = chunk["content"]
 
         # Embed
-        vectors, dim = embed_chunk(content)
+        vectors, dim = embed_content(content)
 
         # Initialize FAISS if first time
         if index is None:
@@ -73,4 +73,56 @@ def RetainKnowledge(path):
 
     logger.info(f"Finished > {path}")
 
+
+def RecallKnowledge(query, top_k=3, max_distance=2.0):
+    faiss_index = get_faiss()
+    if faiss_index is None or faiss_index.ntotal == 0:
+        logger.error("FAISS INDEX DOES NOT EXIST")
+        return []
+
+    # load metadata
+    metadata = load_metadata()
+    if not metadata:
+        logger.error("METADATA IS EMPTY OR DOES NOT EXIST")
+        return []
+
+    # Cap top_k to the actual number of vectors in the index
+    top_k = min(top_k, faiss_index.ntotal)
+
+    # embed query
+    embedded_query, dim = embed_content(query)
+
+    # Search
+    distances, indices = faiss_index.search(embedded_query, top_k)
+
+    # get results
+    results = []
+    for rank, (idx, dist) in enumerate(zip(indices[0], distances[0])):
+        if idx < 0:
+            continue
+        if dist > max_distance:
+            continue
+        if idx >= len(metadata):
+            continue  # safety guard
+
+        results.append({
+            "rank": rank + 1,
+            "distance": float(dist),
+            "faiss_index": idx,
+            "chunk_index": metadata[idx]["chunk_index"],
+            "content": metadata[idx]["content"],
+        })
+
+    return results
+
+
+if __name__ == "__main__":
+    query = "Who is is the Daedric Prince of Forbidden Knowledge?"
+    results = RecallKnowledge(query)
+
+    for item in results:
+        print("\n")
+        print(f"Index: {item["chunk_index"]}")
+        print(item["content"])
+        print("=" * 60)
 

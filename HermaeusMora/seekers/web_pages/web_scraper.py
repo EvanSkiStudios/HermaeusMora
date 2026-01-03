@@ -182,7 +182,7 @@ def save_chunks(file_name, chunks, chunker):
 
 
 if __name__ == "__main__":
-    html_file = fetch_html("https://en.uesp.net/wiki/Lore:Hermaeus_Mora")
+    html_file = fetch_html("https://en.uesp.net/wiki/Skyrim:Skyrim")
     markdown_file = convert_html(html_file)
 
     try:
@@ -195,7 +195,12 @@ if __name__ == "__main__":
         json_chunks = save_chunks(file_name, chunks, chunker)
         RetainKnowledge(json_chunks)
 
+        # clean up
+        os.remove(html_file)
+        os.remove(markdown_file)
+        os.remove(json_chunks)
+
     except Exception as e:
-        print(f"\n✗ Error: {e}")
+        logger.error(f"\n✗ Error: {e}")
         import traceback
         traceback.print_exc()
