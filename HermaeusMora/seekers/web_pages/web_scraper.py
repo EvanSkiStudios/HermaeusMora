@@ -10,6 +10,7 @@ from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
 
 from apocrypha.EpistolaryAcumen import RetainKnowledge
+from seekers.web_pages.test_reformat import clean_markdown_file
 from utility_scripts.functions import url_to_filename
 from utility_scripts.system_logging import setup_logger
 
@@ -110,7 +111,8 @@ def chunk_document(path_to_doc):
     # Create HybridChunker
     chunker = HybridChunker(
         tokenizer=tokenizer,
-        merge_peers=True  # Merge small adjacent chunks
+        merge_peers=True,  # Merge small adjacent chunks
+        always_emit_headings=False
     )
 
     # Generating chunks
@@ -185,8 +187,10 @@ if __name__ == "__main__":
     html_file = fetch_html("https://en.uesp.net/wiki/Lore:Hermaeus_Mora")
     markdown_file = convert_html(html_file)
 
+    cleaned_markdown = clean_markdown_file(markdown_file)
+
     try:
-        file_name, chunks, tokenizer, chunker = chunk_document(markdown_file)
+        file_name, chunks, tokenizer, chunker = chunk_document(cleaned_markdown)
 
         # Analyze chunks
         # analyze_chunks(chunks, tokenizer)
@@ -197,7 +201,7 @@ if __name__ == "__main__":
 
         # clean up
         os.remove(html_file)
-        os.remove(markdown_file)
+        # os.remove(markdown_file)
         os.remove(json_chunks)
 
     except Exception as e:

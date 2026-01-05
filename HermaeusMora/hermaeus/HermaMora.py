@@ -69,7 +69,7 @@ class HermaeusMora:
         response = chat(
             model=self.model_name,
             messages=[
-                {"role": "system", "content": f"{HM_personality}\nStay in character, Use this context to respond to the user:\n{context}"},
+                {"role": "system", "content": f"{HM_personality}\nStay in character.\n Use this context to respond to the user:\n{context}"},
                 {"role": "user", "content": prompt}
             ],
             options=options,

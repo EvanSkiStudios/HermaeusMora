@@ -1,6 +1,5 @@
 from apocrypha.EpistolaryAcumen import RecallKnowledge
 from hermaeus.HermaMora import HermaeusMora
-from test_format import to_markdown
 
 HermaeusMora = HermaeusMora()
 HermaeusMora.create()
@@ -11,6 +10,10 @@ while True:
     results = RecallKnowledge(prompt)
     context = []
     for item in results:
+        print("=" * 10)
+        print(item["distance"])
+        print(item["content"])
+        print("=" * 10)
         context.append(item["content"])
     context_info = "\n".join(context)
 
