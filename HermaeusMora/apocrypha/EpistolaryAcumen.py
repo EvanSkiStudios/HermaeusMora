@@ -74,7 +74,7 @@ def RetainKnowledge(path):
     logger.info(f"Finished > {path}")
 
 
-def RecallKnowledge(query, top_k=3, max_distance=2.0):
+def RecallKnowledge(query, top_k=5, max_distance=0.9):
     faiss_index = get_faiss()
     if faiss_index is None or faiss_index.ntotal == 0:
         logger.error("FAISS INDEX DOES NOT EXIST")

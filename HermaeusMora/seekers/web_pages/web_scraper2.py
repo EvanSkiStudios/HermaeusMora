@@ -1,6 +1,10 @@
 import os
 import requests
 import json
+import re
+
+import trafilatura
+from bs4 import BeautifulSoup
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -10,7 +14,6 @@ from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
 
 from apocrypha.EpistolaryAcumen import RetainKnowledge
-from seekers.test2 import clean_markdown_file
 from utility_scripts.functions import url_to_filename
 from utility_scripts.system_logging import setup_logger
 
@@ -27,64 +30,90 @@ HEADERS = {
 }
 
 
-def fetch_html(url: str):
-    """Fetches HTML from a URL and saves it to a local .html file.
-     Returns:
-        str: The file path to the html,
-        otherwise
-        int: -1 if the request fails.
+CITATION_RE = re.compile(r"\[\s*\d+\s*\]")
+
+
+def remove_citations(text: str) -> str:
+    return CITATION_RE.sub("", text)
+
+
+def extract_main_content(html: str, source_url: str | None = None) -> str:
     """
-    logger.info(f"Fetching {url}")
+    Attempt main-content extraction using trafilatura.
+    Falls back to DOM-based extraction if needed.
+    """
+
+    # --- Primary: Trafilatura ---
+    extracted = trafilatura.extract(
+        html,
+        url=source_url,
+        include_comments=False,
+        include_tables=False,
+        include_links=False,
+        favor_precision=True
+    )
+
+    if extracted and len(extracted) > 1000:
+        return extracted.strip()
+
+    # --- Fallback: DOM-based (MediaWiki / UESP / Wikipedia) ---
+    soup = BeautifulSoup(html, "lxml")
+
+    # common MediaWiki container
+    content = soup.find("div", id="mw-content-text")
+
+    if content:
+        text = content.get_text("\n", True)  # type: ignore[arg-type]
+        if len(text) > 500:
+            return text
+
+    # --- Final fallback: body text ---
+    body = soup.body.get_text("\n", strip=True) if soup.body else ""
+    return body
+
+
+def fetch_and_extract(url: str) -> str | int:
+    """Fetch URL and return extracted main content text."""
+    logger.info(f"Fetching and extracting {url}")
 
     response = requests.get(url, headers=HEADERS)
-
-    status_code = f"{url} || Responded with: {response.status_code}"
     if response.status_code != 200:
-        logger.error(status_code)
+        logger.error(f"{url} || Responded with: {response.status_code}")
         return -1
 
-    logger.info(status_code)
+    content = extract_main_content(response.text, source_url=url)
 
-    save_dir = Path("downloads").resolve()
-    save_dir.mkdir(exist_ok=True)
-
-    path = save_dir / f"{url_to_filename(url)}.html"
-
-    with path.open("wb") as f:
-        f.write(response.content)
-
-    return str(path)
-
-
-def convert_html(path_to_html):
-    """Converts HTML to a formated MarkDown File
-     Returns:
-        str: The file path to the markdown file,
-        otherwise
-        int: -1 if the html file does not exist.
-    """
-    logger.info(f"Converting > {Path(path_to_html).name}")
-
-    if not os.path.exists(path_to_html):
-        logger.error(f"{path_to_html} Does not exist")
+    if not content or len(content) < 500:
+        logger.error("Extraction failed or content too small")
         return -1
 
-    converter = DocumentConverter()
-    doc = converter.convert(path_to_html).document
+    return content
 
+
+def save_markdown(text: str, name: str) -> str:
     markdown_dir = Path("markdowns").resolve()
     markdown_dir.mkdir(exist_ok=True)
 
-    path = markdown_dir / Path(path_to_html).name
-    converted_path = path.with_suffix(".md")
+    path = markdown_dir / f"{name}.md"
 
-    markdown_text = doc.export_to_markdown()
+    with path.open("w", encoding="utf-8") as f:
+        f.write(text)
 
-    with converted_path.open("w", encoding="utf-8") as f:
-        f.write(markdown_text)
+    logger.info(f"Saved markdown > {path.name}")
+    return str(path)
 
-    logger.info(f"Finished > {Path(converted_path).name}")
-    return str(converted_path)
+
+def heuristic_cleanup(text: str) -> str:
+    cleaned = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) < 40:
+            continue
+        if sum(c.isalnum() for c in line) / max(len(line), 1) < 0.6:
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned)
+
 
 
 def chunk_document(path_to_doc):
@@ -184,33 +213,24 @@ def save_chunks(file_name, chunks, chunker):
 
 
 if __name__ == "__main__":
-    html_file = fetch_html("https://en.uesp.net/wiki/Lore:Hermaeus_Mora")
-    markdown_file = convert_html(html_file)
+    url = "https://en.uesp.net/wiki/Lore:Hermaeus_Mora"
 
-    cleaned_markdown = clean_markdown_file(markdown_file)
+    extracted_text = fetch_and_extract(url)
+    if extracted_text == -1:
+        raise RuntimeError("Failed to extract content")
 
-    base_dir = Path(__file__).resolve().parent
-    cleaned_file = base_dir / "cleaned.md"
+    extracted_text = remove_citations(extracted_text)
+    extracted_text = heuristic_cleanup(extracted_text)
 
-    with cleaned_file.open("w", encoding="utf-8") as file:
-        file.write(cleaned_markdown)
+    file_name = url_to_filename(url)
+    markdown_file = save_markdown(extracted_text, file_name)
 
     try:
-        file_name, chunks, tokenizer, chunker = chunk_document(cleaned_file)
-
-        # Analyze chunks
-        # analyze_chunks(chunks, tokenizer)
-
-        # Save chunks
+        file_name, chunks, tokenizer, chunker = chunk_document(markdown_file)
         json_chunks = save_chunks(file_name, chunks, chunker)
         RetainKnowledge(json_chunks)
 
-        # clean up
-        # os.remove(html_file)
-        # os.remove(markdown_file)
-        # os.remove(json_chunks)
-
     except Exception as e:
-        logger.error(f"\n✗ Error: {e}")
+        logger.error(f"✗ Error: {e}")
         import traceback
         traceback.print_exc()
